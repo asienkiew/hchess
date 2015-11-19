@@ -8,6 +8,7 @@ import Control.Parallel
 import Control.Monad
 import Control.Parallel.Strategies
 import Control.Parallel
+import Data.Vector.Strategies
 
 podziel (a,b) =
   case (a,b) of
@@ -71,7 +72,8 @@ data Piece = Queen | King | Rook | Bishop | Knight | Pawn deriving (Eq, Show)
 data Color = White | Black deriving (Eq, Show)
 data CPiece = CPiece {p :: Piece, c ::  Color }  | Empty deriving (Eq)
 
-data Checkboard = Checkboard {board :: V.Vector CPiece , whoNext :: Color, status :: Status}
+data Checkboard = Checkboard {board :: V.Vector CPiece , whoNext :: Color, status :: Status} deriving( Eq)
+instance NFData Checkboard
 data Status = Draw | WhiteWon | BlackWon | InProgress deriving (Eq, Show)
 
 instance Show Checkboard where
@@ -259,19 +261,19 @@ getBestMove level checkboard
   -- | level == 0 && V.null moves = (0, (0,0))
   | level == 0 =  ((extremumFunc movesScores), moves V.! (extremumFuncIndex movesScores))
 --  | level < 3  && V.null moves = (sign * 10000, (0,0))   --TODO: to tak jak by szachmmat
-  | level < 4 = ( ( extremumFunc movesScores), (0,0))
+  | level < 5 = ( ( extremumFunc movesScores), (0,0))
 
-  | level == 4 = (getScore checkboard whoAtBegin, (0,0))
+  | level == 5 = (getScore checkboard whoAtBegin, (0,0))
   where
-        checkboardsAfterMove = V.map (moveWithoutAssert checkboard) moves
+        checkboardsAfterMove = (V.map (moveWithoutAssert checkboard) moves) `using` (parVector 3)
         moves = V.fromList  [(from, to) | (from, to)  <- precompiledMoves, isMoveLegal checkboard (from, to)]
         whoAtBegin = if level `mod` 2 == 0 then whoNext checkboard else oppColor
         oppColor = if (whoNext checkboard == White) then Black else White
         extremumFuncIndex = if level `mod` 2 == 0 then V.maxIndex else V.minIndex
         extremumFunc = if level `mod` 2 == 0 then V.maximum else V.minimum
         sign = if whoAtBegin == whoNext checkboard then (1) else (-1)
-        precompiledMoves = foldl (++) [] ((parMap rwhnf)  (\from -> ((getPossibleMovesTable ((board checkboard) V.! from)) V.! from)) [0..63])
-        movesScores =  V.map  (fst . ( getBestMove (level + 1)))  checkboardsAfterMove
+        precompiledMoves = foldl (++) [] (map  (\from -> ((getPossibleMovesTable ((board checkboard) V.! from)) V.! from)) [0..63] `using` rpar)
+        movesScores =  V.map  (fst . ( getBestMove (level + 1)))  checkboardsAfterMove `using` (parVector 3)
 
 toMove ::  [Char] -> (Int,Int)
 toMove x
