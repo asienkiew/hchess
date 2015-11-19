@@ -4,8 +4,10 @@ import Data.Maybe (fromJust)
 import Data.List.Split (splitEvery)
 import Data.List (intersect)
 import qualified Data.Vector as V
-
-
+import Control.Parallel
+import Control.Monad
+import Control.Parallel.Strategies
+import Control.Parallel
 
 podziel (a,b) =
   case (a,b) of
@@ -54,6 +56,14 @@ quicksort (x:xs) =
 
 
 
+whitePawnEval = V.fromList $ reverse [  0,  0,  0,  0,  0,  0,  0,  0,50, 50, 50, 50, 50, 50, 50, 50,10, 10, 20, 30, 30, 20, 10, 10, 5,  5, 10, 25, 25, 10,  5,  5, 0,  0,  0, 20, 20,  0,  0,  0, 5, -5,-10,  0,  0,-10, -5,  5, 5, 10, 10,-20,-20, 10, 10,  5, 0,  0,  0,  0,  0,  0,  0,  0]
+whiteKnightEval =  V.fromList $ reverse [ -50,-40,-30,-30,-30,-30,-40,-50,-40,-20,  0,  0,  0,  0,-20,-40,-30,  0, 10, 15, 15, 10,  0,-30,-30,  5, 15, 20, 20, 15,  5,-30,-30,  0, 15, 20, 20, 15,  0,-30,-30,  5, 10, 15, 15, 10,  5,-30,-40,-20,  0,  5,  5,  0,-20,-40,  -50,-40,-30,-30,-30,-30,-40,-50]
+whiteBishopEval =  V.fromList $ reverse [-20,-10,-10,-10,-10,-10,-10,-20,-10,  0,  0,  0,  0,  0,  0,-10,-10,  0,  5, 10, 10,  5,  0,-10,-10,  5,  5, 10, 10,  5,  5,-10,-10,  0, 10, 10, 10, 10,  0,-10,-10, 10, 10, 10, 10, 10, 10,-10,-10,  5,  0,  0,  0,  0,  5,-10,-20,-10,-10,-10,-10,-10,-10,-20]
+whiteRookEval =  V.fromList $ reverse [0,  0,  0,  0,  0,  0,  0,  0,  5, 10, 10, 10, 10, 10, 10,  5, -5,  0,  0,  0,  0,  0,  0, -5, -5,  0,  0,  0,  0,  0,  0, -5, -5,  0,  0,  0,  0,  0,  0, -5, -5,  0,  0,  0,  0,  0,  0, -5, -5,  0,  0,  0,  0,  0,  0, -5,  0,  0,  0,  5,  5,  0,  0,  0]
+whiteQueenEval =  V.fromList $ reverse [-20,-10,-10, -5, -5,-10,-10,-20,-10,  0,  0,  0,  0,  0,  0,-10,-10,  0,  5,  5,  5,  5,  0,-10, -5,  0,  5,  5,  5,  5,  0, -5,  0,  0,  5,  5,  5,  5,  0, -5,-10,  5,  5,  5,  5,  5,  0,-10,-10,  0,  5,  0,  0,  0,  0,-10,-20,-10,-10, -5, -5,-10,-10,-20]
+whiteKingMiddleEval =  V.fromList $ reverse [-30,-40,-40,-50,-50,-40,-40,-30,-30,-40,-40,-50,-50,-40,-40,-30,-30,-40,-40,-50,-50,-40,-40,-30,-30,-40,-40,-50,-50,-40,-40,-30,-20,-30,-30,-40,-40,-30,-30,-20,-10,-20,-20,-20,-20,-20,-20,-10, 20, 20,  0,  0,  0,  0, 20, 20, 20, 30, 10,  0,  0, 10, 30, 20]
+whiteKingEndEval =  V.fromList $ reverse [-50,-40,-30,-20,-20,-30,-40,-50,-30,-20,-10,  0,  0,-10,-20,-30,-30,-10, 20, 30, 30, 20,-10,-30,-30,-10, 30, 40, 40, 30,-10,-30,-30,-10, 30, 40, 40, 30,-10,-30,-30,-10, 20, 30, 30, 20,-10,-30,-30,-30,  0,  0,  0,  0,-30,-30,-50,-30,-30,-30,-30,-30,-30,-50]
+
 
 
 
@@ -61,9 +71,11 @@ data Piece = Queen | King | Rook | Bishop | Knight | Pawn deriving (Eq, Show)
 data Color = White | Black deriving (Eq, Show)
 data CPiece = CPiece {p :: Piece, c ::  Color }  | Empty deriving (Eq)
 
-data Checkboard = Checkboard {board :: V.Vector CPiece , whoNext :: Color}
-data Status = Draw | WhiteWon | BlackWon | Inprogress deriving (Eq, Show)
+data Checkboard = Checkboard {board :: V.Vector CPiece , whoNext :: Color, status :: Status}
+data Status = Draw | WhiteWon | BlackWon | InProgress deriving (Eq, Show)
 
+instance Show Checkboard where
+    show a = checkboardToStr a
 
 instance Show CPiece where
     show (CPiece Queen White) = "Q"
@@ -115,19 +127,23 @@ convert x
     | x == '.' = (Empty)
     | otherwise = error "bad letter"
 
+getOppColor:: Color -> Color
+getOppColor color = if (color == White) then Black else White
+
 initialBoard = V.fromList (map convert ("RNBQKBNR" ++ replicate 8 'P' ++ replicate 32 '.' ++ replicate 8 'p' ++ "rnbqkbnr" ))
 --initialBoard = V.fromList (map convert ("RNBQKBNR" ++ replicate 48 '.' ++ "rnbqkbnr" ))
 
 moveWithoutAssert:: Checkboard -> (Int, Int) -> Checkboard
 moveWithoutAssert x m
-  | to > 55 && from < 56 && from > 40 && movedPiece == (CPiece Pawn White)  = Checkboard (vector V.// [(to, (CPiece Queen White)),(from, Empty)]) oppColor
-  | to < 8 && from < 16 && from > 7 && movedPiece == (CPiece Pawn Black)  = Checkboard (vector V.// [(to, (CPiece Queen Black)),(from, Empty)]) oppColor
-  | otherwise =  Checkboard (vector V.// [(to, movedPiece),(from, Empty)]) oppColor
+  | to > 55 && from < 56 && from > 40 && movedPiece == (CPiece Pawn White)  = Checkboard (vector V.// [(to, (CPiece Queen White)),(from, Empty)]) oppColor InProgress
+  | to < 8 && from < 16 && from > 7 && movedPiece == (CPiece Pawn Black)  = Checkboard (vector V.// [(to, (CPiece Queen Black)),(from, Empty)]) oppColor InProgress
+  | otherwise =  Checkboard (vector V.// [(to, movedPiece),(from, Empty)]) oppColor InProgress
   where from = fst m
 	to = snd m
 	movedPiece = vector V.! (from)
 	vector = board x
 	oppColor = if (whoNext x == White) then Black else White
+	--status =
 
 --initialCBoard =  (CPiece Rook White) (CPiece Knight White) ++ (CPiece Bishop White) ++ (CPiece Queen White) + (CPiece King White)
 --                ++ (CPiece Bishop White) ++ (CPiece Knight White) ++ (CPiece Rook White)
@@ -138,11 +154,7 @@ moveWithoutAssert x m
 
 
 isMovePossible::  (Int, Int) -> CPiece -> Bool
-isMovePossible move piece = isMovePossibleL  (fst move `div` 8) (fst move `mod` 8) (snd move `div` 8) (snd move `mod` 8) piece
-
-
-isMovePossibleL::  Int -> Int -> Int -> Int -> CPiece -> Bool
-isMovePossibleL fromY fromX  toY toX piece
+isMovePossible move piece
  | ((fromY == toY) && (fromX == toX)) = False
  | p piece == Rook && rookMove = True
  | p piece == Bishop && bishopMove = True
@@ -163,6 +175,14 @@ isMovePossibleL fromY fromX  toY toX piece
                         (fromY == 6 && toY == 4 && fromX == toX)) || -- 2 squares at first move
                         (abs(fromX - toX) == 1 && fromY == toY + 1) -- attacking
     kingMove = abs(fromX - toX) <= 1 && abs(fromY - toY) <= 1
+    (fromY, fromX) = (fst move `divMod` 8)
+    (toY, toX) = (snd move `divMod` 8)
+
+getPossibleMovesTable:: CPiece -> V.Vector [(Int, Int)]
+getPossibleMovesTable cpiece
+ | cpiece == Empty = V.map (\x -> [  ])  (V.enumFromTo 0 63)
+ | otherwise = V.map (\x -> [(x,y) | y<-[0..63], isMovePossible (x, y) cpiece  ])  (V.enumFromTo 0 63)
+
 isPieceBetween:: V.Vector CPiece -> (Int, Int) -> Bool
 isPieceBetween vector move
   | ((abs(fromX - toX) < 2) && (abs(fromY - toY) < 2)) = False
@@ -199,50 +219,59 @@ isMoveLegal checkboard move
         (toY, toX) = (snd move `divMod` 8)
 
 isInCheck:: Checkboard -> Color -> Bool
-isInCheck checkboard color
- | possibleAttacks == [] = False
- | otherwise = True
+isInCheck checkboard color =  possibleAttacks /= []
   where kingPos = fromJust $ V.findIndex (CPiece King color ==) vector
         vector = board checkboard
         oppPositions = [x | x <- [0..63], vector V.! x /= Empty,  c (vector V.! x) == oppColor]
         oppColor = if (color == White) then Black else White
         pawnPositions = [x | x <- oppPositions,  p (vector V.! x) == Pawn]
-        possibleAttacks = [(from, kingPos) | from <- oppPositions,  isMovePossible (from,  kingPos) (vector V.! from), not $ isPieceBetween vector (from,kingPos),
-                      [(kingPos - 8), (kingPos + 8)] `intersect` pawnPositions == [] ] --be sure to exlude Pawn nonattacking move
+        possibleAttacks = [(from, kingPos) | from <- oppPositions,
+                                             isMovePossible (from,  kingPos) (vector V.! from),
+                                             not $ isPieceBetween vector (from,kingPos),
+                                             [(kingPos - 8), (kingPos + 8)] `intersect` pawnPositions == [] ] --be sure to exlude Pawn nonattacking move
 
 willBeInCheck::Checkboard -> (Int, Int) -> Color -> Bool
 willBeInCheck a b c = isInCheck (moveWithoutAssert a b) c
 
 
 getScore::Checkboard ->  Color -> Int
-getScore checkboard who = V.sum $ V.map (cpieceToValue who) vector
+getScore checkboard who = score
   where vector = board checkboard
+	score = V.sum $ V.imap (cpieceToValue who) vector
 
 
-cpieceToValue::  Color -> CPiece -> Int
-cpieceToValue who cpiece
+cpieceToValue::  Color -> Int -> CPiece -> Int
+cpieceToValue who pos cpiece
   |   cpiece == Empty = 0
-  |p  cpiece == Pawn = sign * 100
-  |p  cpiece == Knight = sign * 320
-  |p  cpiece == Bishop = sign * 330
-  |p  cpiece == Rook = sign * 500
-  |p  cpiece == Queen = sign * 900
-  |p  cpiece == King = sign * 100000
-    where sign = if who == (c cpiece) then (1) else (-1)
+  |p  cpiece == Pawn =   sign * (100 + ( whitePawnEval V.! corr_pos))
+  |p  cpiece == Knight = sign * (320 + ( whiteKnightEval V.! corr_pos))
+  |p  cpiece == Bishop = sign * (330 + ( whiteBishopEval V.! corr_pos))
+  |p  cpiece == Rook =   sign * (500 + ( whiteRookEval V.! corr_pos))
+  |p  cpiece == Queen =  sign * (900 + ( whiteQueenEval V.! corr_pos))
+  |p  cpiece == King =   sign * (100000 + ( whiteKingMiddleEval V.! corr_pos))
+  | otherwise = 0
+  where sign = if who == (c cpiece) then (1) else (-1)
+	corr_pos = if (c cpiece) == White then pos else (63 - pos)
 
 
 getBestMove::  Int -> Checkboard -> (Int, (Int, Int))    --(score, move)
 getBestMove level checkboard
-  | level == 0 =  (0, moves V.! (extremumFuncIndex $ V.map  (fst . ( getBestMove (level + 1)))  checkboardsAfterMove))
-  | level < 2 = (extremumFunc $ V.map  (fst . ( getBestMove (level + 1)))  checkboardsAfterMove, (0,0))
-  | level == 2 = (getScore checkboard whoAtBegin, (0,0))
+  -- | level == 0 && V.null moves = (0, (0,0))
+  | level == 0 =  ((extremumFunc movesScores), moves V.! (extremumFuncIndex movesScores))
+--  | level < 3  && V.null moves = (sign * 10000, (0,0))   --TODO: to tak jak by szachmmat
+  | level < 4 = ( ( extremumFunc movesScores), (0,0))
+
+  | level == 4 = (getScore checkboard whoAtBegin, (0,0))
   where
         checkboardsAfterMove = V.map (moveWithoutAssert checkboard) moves
-        moves = V.fromList [(from, to) | from <- [0..63], to <- [0..63],  isMoveLegal checkboard (from, to)]
+        moves = V.fromList  [(from, to) | (from, to)  <- precompiledMoves, isMoveLegal checkboard (from, to)]
         whoAtBegin = if level `mod` 2 == 0 then whoNext checkboard else oppColor
         oppColor = if (whoNext checkboard == White) then Black else White
         extremumFuncIndex = if level `mod` 2 == 0 then V.maxIndex else V.minIndex
         extremumFunc = if level `mod` 2 == 0 then V.maximum else V.minimum
+        sign = if whoAtBegin == whoNext checkboard then (1) else (-1)
+        precompiledMoves = foldl (++) [] ((parMap rwhnf)  (\from -> ((getPossibleMovesTable ((board checkboard) V.! from)) V.! from)) [0..63])
+        movesScores =  V.map  (fst . ( getBestMove (level + 1)))  checkboardsAfterMove
 
 toMove ::  [Char] -> (Int,Int)
 toMove x
@@ -255,17 +284,28 @@ toMove x
   where
      rows = ['a'..'h']
      columns = ['1'..'8']
-     err = error "bad format of Command"
+     err = (0,0) --error "bad format of Command"
      a = toLower(x !! 0)
      b = toLower(x !! 1)
      c = toLower(x !! 2)
      d = toLower(x !! 3)
 
+moveToString ::  (Int,Int) -> [Char]
+moveToString move  =   (rows !! fromX):(columns !! fromY):(rows !! toX):(columns !! toY) : []
+  where
+     rows = ['a'..'h']
+     columns = ['1'..'8']
+     err = (0,0) --error "bad format of Command"
+     (fromY, fromX) = (fst move `divMod` 8)
+     (toY, toX) = (snd move `divMod` 8)
 
 printBoard :: Checkboard  -> IO ()
-printBoard checkboard
+printBoard checkboard = putStr $ checkboardToStr checkboard
+
+checkboardToStr :: Checkboard  -> [Char]
+checkboardToStr checkboard
   | V.length a /= 64 = error "Bad format"
-  | otherwise  = putStr . concat . reverse $
+  | otherwise  = concat . reverse $
 
                 border  ++
                 zipWith3  (\x y z -> x ++ y ++ z)
@@ -283,10 +323,20 @@ printBoard checkboard
 
 moveInfinite ::  Checkboard  -> IO ()
 moveInfinite a = do
-  printBoard a
-  print $ whoNext a
-  --print $ length moves
-  moveInfinite b
-  where b = moveWithoutAssert a (snd $ getBestMove 0 a     )
+  when (status a == InProgress) $ do
+     print a
+     print $ whoNext a
+     command <- getLine
+
+     if toMove command /= (0,0) && (isMoveLegal a (toMove command))
+        then do print $  moveWithoutAssert a $ toMove command
+	else do putStr  "illegal move"
+                moveInfinite a
+     let bestMove = (snd $ getBestMove 0 (moveWithoutAssert a $ toMove command)  )
+     print $ "CHosen Move: " ++ (moveToString bestMove )
+     --print $ foldl (++) [] (map (\from -> ((getPossibleMovesTable ((board (moveWithoutAssert a $ toMove command)) V.! from)) V.! from)) [0..63])
+     moveInfinite $ moveWithoutAssert (moveWithoutAssert a $ toMove command) bestMove
+
     --    moves = [(from, to) | from <- [0..63], to <- [0..63],  isMoveLegal a (from, to)]
 
+main = moveInfinite  (Checkboard initialBoard White InProgress)
