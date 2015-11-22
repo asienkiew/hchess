@@ -78,6 +78,7 @@ moveInfinite a = do
                  return()
          return()
     else do
+         print a
 	 print $ status a
 
     --    moves = [(from, to) | from <- [0..63], to <- [0..63],  isMoveLegal a (from, to)]

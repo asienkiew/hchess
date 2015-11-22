@@ -17,13 +17,19 @@ data CPiece = CPiece {p :: Piece, c ::  Color }  | Empty deriving (Eq)
 
 data Checkboard = Checkboard {board :: V.Vector CPiece , whoNext :: Color, status :: Status} deriving( Eq)
 instance NFData Checkboard
-data Status = Draw | WhiteWon | BlackWon | InProgress deriving (Eq, Show)
+data Status = Draw | WhiteWon | BlackWon | InProgress deriving (Eq)
 
 instance Show Checkboard where
     show a = checkboardToStr a
 
 instance Show CPiece where
     show a =  [convertToChar a]
+
+instance Show Status where
+    show Draw =  "Draw"
+    show WhiteWon =  "The End - White won"
+    show BlackWon =  "The End - Black won"
+    show InProgress =  "Game is on progress"
 
 stringToMove ::  [Char] -> (Int,Int)
 stringToMove x
@@ -111,8 +117,8 @@ getOppColor:: Color -> Color
 getOppColor color = if (color == White) then Black else White
 
 --initialBoard = V.fromList (map convert ("RNBQKBNR" ++ replicate 8 'P' ++ replicate 32 '.' ++ replicate 8 'p' ++ "rnbqkbnr" ))
---initialBoard = V.fromList (map convert ("RNB.KBN." ++ replicate 47 '.' ++ "R..k....." ))
-initialBoard = V.fromList (map convert ("....KB.qb..P...P.P....P...Pb..............n.....ppp..Pppr...Qk.r"))
+initialBoard = V.fromList (map convert ("RNB.KBN." ++ replicate 47 '.' ++ "R..k....." ))
+--initialBoard = V.fromList (map convert ("....KB.qb..P...P.P....P...Pb..............n.....ppp..Pppr...Qk.r"))
 
 
 
