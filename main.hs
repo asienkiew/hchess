@@ -61,7 +61,7 @@ moveInfinite a = do
          print a
          print $ whoNext a
          command <- getLine
-
+         when (command == "r" && (length $ history a) > 1) $ moveInfinite $ history a !! 1
          if stringToMove command /= (0,0) && (isMoveLegal a (stringToMove command))
             then do print $  moveWithoutAssert a $ stringToMove command
             else do
@@ -83,4 +83,4 @@ moveInfinite a = do
 
     --    moves = [(from, to) | from <- [0..63], to <- [0..63],  isMoveLegal a (from, to)]
 
-main = moveInfinite  (Checkboard initialBoard White InProgress)
+main = moveInfinite  (Checkboard initialBoard White InProgress [] 0)

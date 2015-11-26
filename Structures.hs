@@ -15,7 +15,12 @@ data Piece = Queen | King | Rook | Bishop | Knight | Pawn deriving (Eq, Show)
 data Color = White | Black deriving (Eq, Show)
 data CPiece = CPiece {p :: Piece, c ::  Color }  | Empty deriving (Eq)
 
-data Checkboard = Checkboard {board :: V.Vector CPiece , whoNext :: Color, status :: Status} deriving( Eq)
+data Checkboard = Checkboard {
+           board :: V.Vector CPiece , 
+           whoNext :: Color, 
+           status :: Status,
+           history :: [Checkboard],
+	   movesNoAttackNoPawn :: Int } deriving( Eq) --number of moves with attack and pawn
 instance NFData Checkboard
 data Status = Draw | WhiteWon | BlackWon | InProgress deriving (Eq)
 
@@ -30,7 +35,7 @@ instance Show Status where
     show WhiteWon =  "The End - White won"
     show BlackWon =  "The End - Black won"
     show InProgress =  "Game is on progress"
-
+    
 stringToMove ::  [Char] -> (Int,Int)
 stringToMove x
   | length x /= 4 = err
@@ -125,23 +130,34 @@ initialBoard = V.fromList (map convert ("RNB.KBN." ++ replicate 47 '.' ++ "R..k.
 
 moveWithoutAssertL:: Checkboard -> (Int, Int) -> Checkboard
 moveWithoutAssertL x m
-  | to > 55 && from < 56 && from > 40 && movedPiece == (CPiece Pawn White)  = Checkboard (vector V.// [(to, (CPiece Queen White)),(from, Empty)]) oppColor status
-  | to < 8 && from < 16 && from > 7 && movedPiece == (CPiece Pawn Black)  = Checkboard (vector V.// [(to, (CPiece Queen Black)),(from, Empty)]) oppColor status
-  | otherwise =  Checkboard (vector V.// [(to, movedPiece),(from, Empty)]) oppColor status
+  | to > 55 && from < 56 && from > 40 && movedPiece == (CPiece Pawn White)  = Checkboard (vector V.// [(to, (CPiece Queen White)),(from, Empty)]) oppColor status newHistory (movesNoAttackNoPawn x)
+  | to < 8 && from < 16 && from > 7 && movedPiece == (CPiece Pawn Black)  = Checkboard (vector V.// [(to, (CPiece Queen Black)),(from, Empty)]) oppColor status newHistory (movesNoAttackNoPawn x)
+  | otherwise =  Checkboard (vector V.// [(to, movedPiece),(from, Empty)]) oppColor status  newHistory (movesNoAttackNoPawn x)
   where from = fst m
 	to = snd m
 	movedPiece = vector V.! (from)
+	attackedPiece = vector V.! (to)
 	vector = board x
 	oppColor = if (whoNext x == White) then Black else White
 	status = computeStatus x
+	newHistory = x:(history x)
+
 
 
 moveWithoutAssert:: Checkboard -> (Int, Int) -> Checkboard
-moveWithoutAssert x m = Checkboard (board middleBoard) (whoNext middleBoard) (computeStatus middleBoard)
+moveWithoutAssert x m = Checkboard (board middleBoard) (whoNext middleBoard) (computeStatus middleBoard) (history middleBoard) newMovesNoAttackNoPawn
    where middleBoard = moveWithoutAssertL x m
+         from = fst m
+         to = snd m
+         vector = board x
+         movedPiece = vector V.! (from)
+         attackedPiece = vector V.! (to)
+         isAttackOrPawnMove = movedPiece == (CPiece Pawn White) || movedPiece == (CPiece Pawn Black) || attackedPiece /= Empty
+         newMovesNoAttackNoPawn = if isAttackOrPawnMove then 0 else (movesNoAttackNoPawn x) + 1 	 
 
 computeStatus :: Checkboard -> Status
 computeStatus x
+   | movesNoAttackNoPawn x == 50 = Draw
    | isAnyPossible =  InProgress
    | not isAnyPossible && isInCheck x whoN &&  whoN == White = BlackWon
    | not isAnyPossible &&  isInCheck x whoN &&  whoN == Black = WhiteWon
