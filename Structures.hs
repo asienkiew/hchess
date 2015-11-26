@@ -10,6 +10,8 @@ import qualified Data.Vector as V
 import Control.Parallel.Strategies
 import Control.Parallel
 
+import Const
+
 
 data Piece = Queen | King | Rook | Bishop | Knight | Pawn deriving (Eq, Show)
 data Color = White | Black deriving (Eq, Show)
@@ -121,13 +123,6 @@ convert x
 getOppColor:: Color -> Color
 getOppColor color = if (color == White) then Black else White
 
---initialBoard = V.fromList (map convert ("RNBQKBNR" ++ replicate 8 'P' ++ replicate 32 '.' ++ replicate 8 'p' ++ "rnbqkbnr" ))
-initialBoard = V.fromList (map convert ("RNB.KBN." ++ replicate 47 '.' ++ "R..k....." ))
---initialBoard = V.fromList (map convert ("....KB.qb..P...P.P....P...Pb..............n.....ppp..Pppr...Qk.r"))
-
-
-
-
 moveWithoutAssertL:: Checkboard -> (Int, Int) -> Checkboard
 moveWithoutAssertL x m
   | to > 55 && from < 56 && from > 40 && movedPiece == (CPiece Pawn White)  = Checkboard (vector V.// [(to, (CPiece Queen White)),(from, Empty)]) oppColor status newHistory (movesNoAttackNoPawn x)
@@ -157,7 +152,7 @@ moveWithoutAssert x m = Checkboard (board middleBoard) (whoNext middleBoard) (co
 
 computeStatus :: Checkboard -> Status
 computeStatus x
-   | movesNoAttackNoPawn x == 50 = Draw
+   | movesNoAttackNoPawn x == no_attack_no_pawn_move_limit = Draw
    | isAnyPossible =  InProgress
    | not isAnyPossible && isInCheck x whoN &&  whoN == White = BlackWon
    | not isAnyPossible &&  isInCheck x whoN &&  whoN == Black = WhiteWon

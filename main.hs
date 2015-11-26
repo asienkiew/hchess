@@ -3,6 +3,8 @@
 import Structures
 import AI
 import Control.Monad
+import qualified Data.Vector as V
+import Const
 
 {-
 podziel (a,b) =
@@ -61,12 +63,12 @@ moveInfinite a = do
          print a
          print $ whoNext a
          command <- getLine
-         when (command == "r" && (length $ history a) > 1) $ moveInfinite $ history a !! 1
-         if stringToMove command /= (0,0) && (isMoveLegal a (stringToMove command))
-            then do print $  moveWithoutAssert a $ stringToMove command
-            else do
-                putStr  "illegal move"
-                moveInfinite a
+         case (command, (length $ history a) > 1, stringToMove command /= (0,0), (isMoveLegal a (stringToMove command))) of
+              ("r", True, _,_) -> do moveInfinite $ history a !! 1
+              (_,_,True,True) -> do  print $  moveWithoutAssert a $ stringToMove command
+              (_,_,_,_) -> do putStr  "illegal move"
+                              moveInfinite a
+
          if (status (moveWithoutAssert a $ stringToMove command) == InProgress)
              then do
                  let bestMove = (snd $ getBestMove 0 (moveWithoutAssert a $ stringToMove command)  )
@@ -83,4 +85,6 @@ moveInfinite a = do
 
     --    moves = [(from, to) | from <- [0..63], to <- [0..63],  isMoveLegal a (from, to)]
 
+    
+initialBoard = V.fromList $ map convert $ standard_board_string    
 main = moveInfinite  (Checkboard initialBoard White InProgress [] 0)

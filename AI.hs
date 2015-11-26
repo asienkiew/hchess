@@ -9,6 +9,7 @@ import Control.Parallel
 import Data.Vector.Strategies
 
 import Structures
+import Const
 
 whitePawnEval = V.fromList $ reverse [  0,  0,  0,  0,  0,  0,  0,  0,50, 50, 50, 50, 50, 50, 50, 50,10, 10, 20, 30, 30, 20, 10, 10, 5,  5, 10, 25, 25, 10,  5,  5, 0,  0,  0, 20, 20,  0,  0,  0, 5, -5,-10,  0,  0,-10, -5,  5, 5, 10, 10,-20,-20, 10, 10,  5, 0,  0,  0,  0,  0,  0,  0,  0]
 whiteKnightEval =  V.fromList $ reverse [ -50,-40,-30,-30,-30,-30,-40,-50,-40,-20,  0,  0,  0,  0,-20,-40,-30,  0, 10, 15, 15, 10,  0,-30,-30,  5, 15, 20, 20, 15,  5,-30,-30,  0, 15, 20, 20, 15,  0,-30,-30,  5, 10, 15, 15, 10,  5,-30,-40,-20,  0,  5,  5,  0,-20,-40,  -50,-40,-30,-30,-30,-30,-40,-50]
@@ -51,10 +52,9 @@ getBestMove level checkboard
   | status checkboard == WhiteWon && whoAtBegin == White = (100000, (0,0))
   | status checkboard == WhiteWon && whoAtBegin == Black = (-100000, (0,0))
   | level == 0 =  ((extremumFunc movesScores), moves V.! (extremumFuncIndex movesScores))
---  | level < 3  && V.null moves = (sign * 10000, (0,0))   --TODO: to tak jak by szachmmat
-  | level < 3 = ( ( extremumFunc movesScores), (0,0))
+  | level < game_tree_depth = ( ( extremumFunc movesScores), (0,0))
 
-  | level == 3 = (getScore checkboard whoAtBegin, (0,0))
+  | level == game_tree_depth = (getScore checkboard whoAtBegin, (0,0))
   where
         checkboardsAfterMove = (V.map (moveWithoutAssert checkboard) moves) `using` (parVector 3)
         moves = V.fromList  [(from, to) | (from, to)  <- precompiledMoves, isMoveLegal checkboard (from, to)]
