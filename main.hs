@@ -5,7 +5,7 @@ import AI
 import Control.Monad
 import qualified Data.Vector as V
 import Const
-
+import qualified Data.Map as Map
 {-
 podziel (a,b) =
   case (a,b) of
@@ -86,5 +86,8 @@ moveInfinite a = do
     --    moves = [(from, to) | from <- [0..63], to <- [0..63],  isMoveLegal a (from, to)]
 
     
-initialBoard = V.fromList $ map convert $ standard_board_string    
-main = moveInfinite  (Checkboard initialBoard White InProgress [] 0)
+initialBoard = V.fromList $ map convert $ white_won_board_string
+preInitialCheckboard =  Checkboard initialBoard White InProgress [] 0 Map.empty
+initialMap = Map.insert (hashCheckboard preInitialCheckboard) 1 $ Map.empty
+initialCheckboard = preInitialCheckboard {historyMap = initialMap}
+main = moveInfinite initialCheckboard
