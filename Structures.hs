@@ -10,13 +10,16 @@ import qualified Data.Vector as V
 import Control.Parallel.Strategies
 import Control.Parallel
 import qualified Data.Map as Map
+import  Data.Int(Int64)
 import Data.Hashable
+import Data.Bits (xor)
 
 import Const
+import Hashing
 
 
-data Piece = Queen | King | Rook | Bishop | Knight | Pawn deriving (Eq, Show)
-data Color = White | Black deriving (Eq, Show)
+data Piece = Queen | King | Rook | Bishop | Knight | Pawn deriving (Eq, Show, Enum, Ord)
+data Color = White | Black deriving (Eq, Show, Enum, Ord)
 data CPiece = CPiece {p :: Piece, c ::  Color }  | Empty deriving (Eq)
 
 data Checkboard = Checkboard {
@@ -25,7 +28,7 @@ data Checkboard = Checkboard {
            status :: Status,
            history :: [Checkboard],
 	   movesNoAttackNoPawn :: Int, --number of moves with attack and pawn
-           historyMap :: Map.Map Int Int } deriving( Eq)
+           historyMap :: Map.Map ChHash Int } deriving( Eq)
 instance NFData Checkboard
 data Status = Draw | WhiteWon | BlackWon | InProgress deriving (Eq)
 
@@ -42,10 +45,27 @@ instance Show Status where
     show BlackWon =  "The End - Black won"
     show InProgress =  "Game is on progress"
     
-
-hashCheckboard ::  Checkboard -> Int
-hashCheckboard a = 0
-
+cpieceOnPosToHash :: Int -> CPiece -> ChHash
+cpieceOnPosToHash pos cpiece 
+  | cpiece == Empty = 0
+  | otherwise = hashTable V.! ((pieceInt * colorInt * (pos + 1)) - 1)
+  where 
+    pieceInt = pieceToInt (p cpiece)
+    colorInt = colorToInt (c cpiece)
+    pieceToInt Queen = 1
+    pieceToInt King = 2
+    pieceToInt Rook = 3
+    pieceToInt Bishop = 4
+    pieceToInt Knight = 5
+    pieceToInt Pawn = 6
+    colorToInt White = 1
+    colorToInt Black = 2
+    
+    
+hashCheckboard ::  Checkboard -> ChHash
+hashCheckboard a = hashedBoard `xor` whoNextHash
+  where hashedBoard = V.foldl (xor) 0 (V.imap cpieceOnPosToHash (board a))
+        whoNextHash = if whoNext a == White then hashTable V.! (6 * 2 * 64) else hashTable V.! (6 * 2 * 64 + 1)
 stringToMove ::  [Char] -> (Int,Int)
 stringToMove x
   | length x /= 4 = err
@@ -109,7 +129,7 @@ convertToChar x
     | x == (CPiece Knight Black) = 'n'
     | x == (CPiece Pawn Black) = 'p'
     | x == (Empty) = '.'
-    | otherwise = error "bad letter"
+    | otherwise = error "bad piece"
 
 convert :: Char -> CPiece
 convert x
@@ -133,44 +153,42 @@ getOppColor color = if (color == White) then Black else White
 
 moveWithoutAssertL:: Checkboard -> (Int, Int) -> Checkboard
 moveWithoutAssertL x m
-  | to > 55 && from < 56 && from > 40 && movedPiece == (CPiece Pawn White)  = Checkboard (vector V.// [(to, (CPiece Queen White)),(from, Empty)]) oppColor status newHistory (movesNoAttackNoPawn x) newHistoryMap
-  | to < 8 && from < 16 && from > 7 && movedPiece == (CPiece Pawn Black)  = Checkboard (vector V.// [(to, (CPiece Queen Black)),(from, Empty)]) oppColor status newHistory (movesNoAttackNoPawn x) newHistoryMap
-  | otherwise =  Checkboard (vector V.// [(to, movedPiece),(from, Empty)]) oppColor status  newHistory (movesNoAttackNoPawn x) newHistoryMap
-
---  | to > 55 && from < 56 && from > 40 && movedPiece == (CPiece Pawn White)  = x { board = (vector V.// [(to, (CPiece Queen White)),(from, Empty)]), whoNext = oppColor,  status = (computeStatus x), history =  newHistory, historyMap =  newHistoryMap}
---  | to < 8 && from < 16 && from > 7 && movedPiece == (CPiece Pawn Black)  = x { board =(vector V.// [(to, (CPiece Queen Black)),(from, Empty)]), whoNext = oppColor,  status = (computeStatus x),  history =  newHistory, historyMap =  newHistoryMap}
---  | otherwise =  x { board =(vector V.// [(to, movedPiece),(from, Empty)]), whoNext = oppColor,  status = (computeStatus x), history =  newHistory, historyMap =  newHistoryMap}
+  | to > 55 && from < 56 && from > 40 && movedPiece == (CPiece Pawn White)  = x { board = (vector V.// [(to, (CPiece Queen White)),(from, Empty)]), whoNext = oppColor,  history =  newHistory}
+  | to < 8 && from < 16 && from > 7 && movedPiece == (CPiece Pawn Black)  = x { board =(vector V.// [(to, (CPiece Queen Black)),(from, Empty)]), whoNext = oppColor,   history =  newHistory}
+  | otherwise =  x { board =(vector V.// [(to, movedPiece),(from, Empty)]), whoNext = oppColor, history =  newHistory}
   where from = fst m
 	to = snd m
 	movedPiece = vector V.! (from)
 	attackedPiece = vector V.! (to)
 	vector = board x
         status = computeStatus x
-	oppColor = if (whoNext x == White) then Black else White
-	newHistory = x:(history x)
-        newHistoryMap = Map.alter updateMap (hashCheckboard x) (historyMap x) --TODO update with xor
-        updateMap Nothing = Just 1
-        updateMap (Just x) = Just (x + 1)
+	oppColor = getOppColor $ whoNext x
+	newHistory = x:(history x)        
+
 
 moveWithoutAssert:: Checkboard -> (Int, Int) -> Checkboard
-moveWithoutAssert x m = middleBoard { status = (computeStatus middleBoard), movesNoAttackNoPawn = newMovesNoAttackNoPawn}
+moveWithoutAssert x m = middleBoard { status = (computeStatus (middleBoard {historyMap =  newHistoryMap }))  , movesNoAttackNoPawn = newMovesNoAttackNoPawn, historyMap =  newHistoryMap}
    where middleBoard = moveWithoutAssertL x m
          from = fst m
          to = snd m
          vector = board x
          movedPiece = vector V.! (from)
          attackedPiece = vector V.! (to)
+         newHistoryMap = if isAttackOrPawnMove then Map.singleton (hashCheckboard middleBoard) 1 else  Map.alter updateMap (hashCheckboard middleBoard) (historyMap middleBoard) --TODO update with xor
          isAttackOrPawnMove = movedPiece == (CPiece Pawn White) || movedPiece == (CPiece Pawn Black) || attackedPiece /= Empty
          newMovesNoAttackNoPawn = if isAttackOrPawnMove then 0 else (movesNoAttackNoPawn x) + 1
+         updateMap Nothing = Just 1
+         updateMap (Just x) = Just (x + 1)         
 
 
 computeStatus :: Checkboard -> Status
 computeStatus x
-   | movesNoAttackNoPawn x == no_attack_no_pawn_move_limit = Draw
+   | movesNoAttackNoPawn x == no_attack_no_pawn_move_limit = Draw -- move limit
+   |  (historyMap x) Map.! (hashCheckboard x) == 3 = Draw --3 the same rule
    | isAnyPossible =  InProgress
    | not isAnyPossible && isInCheck x whoN &&  whoN == White = BlackWon
    | not isAnyPossible &&  isInCheck x whoN &&  whoN == Black = WhiteWon
-   | not isAnyPossible &&  isInCheck x whoN = Draw
+   | not isAnyPossible &&  not (isInCheck x whoN) = Draw
   where
       isAnyPossible = isAnyMovePossible x
       whoN = whoNext x
@@ -246,9 +264,8 @@ isInCheck checkboard color =  possibleAttacks /= []
   where kingPos = fromJust $ V.findIndex (CPiece King color ==) vector
         vector = board checkboard
         oppPositions = [x | x <- [0..63], vector V.! x /= Empty,  c (vector V.! x) == oppColor]
-        oppColor = if (color == White) then Black else White
+        oppColor = getOppColor color
         pawnPositionsColKing = [(kingPos - 8), (kingPos + 8)] `intersect` [x | x <- oppPositions,  p (vector V.! x) == Pawn]
-
         possibleAttacks = [(from, kingPos) | from <- oppPositions,
                                              isMovePossible (from,  kingPos) (vector V.! from),
                                              not $ isPieceBetween vector (from,kingPos),
