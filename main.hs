@@ -16,6 +16,7 @@ playGame ::  Checkboard  -> IO ()
 playGame chBoard = do
     print chBoard
     --print $ historyMap chBoard
+    --print hashTable
     case (status chBoard, whoNext chBoard) of 
         (InProgress, White) -> do 
             print $ whoNext chBoard
@@ -35,11 +36,11 @@ playGame chBoard = do
 
 
 --debug
---print $ foldl (++) [] (map (\from -> ((getPossibleMovesTable ((board chBoard) V.! from)) V.! from)) [0..63])
---moves = [(from, to) | from <- [0..63], to <- [0..63],  isMoveLegal chBoard (from, to)]
+--print $ foldl (++) [] (map (\from -> ((getPossibleMovesTable ((board chBoard) V.! from)) V.! from)) numList)
+--moves = [(from, to) | from <- numList, to <- numList,  isMoveLegal chBoard (from, to)]
   
-initialBoard = V.fromList $ map convert $ standard_board_string
-preInitialCheckboard =  Checkboard initialBoard White InProgress [] 0 Map.empty
+initialBoard = V.fromList $ map convert $ start_board_string
+preInitialCheckboard =  Checkboard initialBoard White InProgress [] Empty 0 Map.empty (hashCheckboard preInitialCheckboard)
 initialMap = Map.singleton (hashCheckboard preInitialCheckboard) 1
 initialCheckboard = preInitialCheckboard {historyMap = initialMap}
 

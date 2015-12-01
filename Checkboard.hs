@@ -6,56 +6,62 @@ import Data.List (intersect)
 import Data.Maybe (fromJust)
 import Control.Parallel.Strategies
 import Control.Parallel
+import Data.Bits (xor)
 
 import Structures
 import Const
 import Hashing
 
 moveWithoutAssertL:: Checkboard -> (Int, Int) -> Checkboard
-moveWithoutAssertL x m
-  | to > 55 && from < 56 && from > 40 && movedPiece == (CPiece Pawn White)  = x { board = (vector V.// [(to, (CPiece Queen White)),(from, Empty)]), whoNext = oppColor,  history =  newHistory}
-  | to < 8 && from < 16 && from > 7 && movedPiece == (CPiece Pawn Black)  = x { board =(vector V.// [(to, (CPiece Queen Black)),(from, Empty)]), whoNext = oppColor,   history =  newHistory}
-  | otherwise =  x { board =(vector V.// [(to, movedPiece),(from, Empty)]), whoNext = oppColor, history =  newHistory}
-  where from = fst m
-	to = snd m
+moveWithoutAssertL x m =  x { board =(vector V.// [(to, reallyMovedPiece),(from, Empty)]), whoNext = oppColor,
+                              history =  newHistory, historyMap =  newHistoryMap, hash = newHashedCheckboard}
+  where
+        (from, to) =  m
+        reallyMovedPiece = if (to < 8 || to > 55) && p movedPiece == Pawn
+                              then (CPiece Queen (c movedPiece))   -- Queen for promotion and movedPiece otherwise
+                              else  movedPiece
 	movedPiece = vector V.! (from)
 	attackedPiece = vector V.! (to)
 	vector = board x
-        status = computeStatus x
 	oppColor = getOppColor $ whoNext x
-	newHistory = x:(history x)        
+	newHistory = x:(history x)
+        newHashedCheckboard = hashCheckboardWithMove (hash x) m (movedPiece, attackedPiece, reallyMovedPiece)
+        newHistoryMap = if isAttackOrPawnMove
+			    then Map.singleton newHashedCheckboard 1
+                            else  Map.alter updateMap newHashedCheckboard (historyMap x)
+        isAttackOrPawnMove = p movedPiece ==  Pawn || attackedPiece /= Empty
+        toHash = cpieceOnPosToHash
+        updateMap Nothing = Just 1
+        updateMap (Just x) = Just (x + 1)
 
 
 moveWithoutAssert:: Checkboard -> (Int, Int) -> Checkboard
-moveWithoutAssert x m = middleBoard { status = (computeStatus (middleBoard {historyMap =  newHistoryMap }))  , movesNoAttackNoPawn = newMovesNoAttackNoPawn, historyMap =  newHistoryMap}
+moveWithoutAssert x m = middleBoard { status = (computeStatus middleBoard),
+                        whoWasAttackedLast = attackedPiece, movesNoAttackNoPawn = newMovesNoAttackNoPawn}
    where middleBoard = moveWithoutAssertL x m
-         from = fst m
-         to = snd m
+         (from, to) =  m
          vector = board x
          movedPiece = vector V.! (from)
          attackedPiece = vector V.! (to)
-         newHistoryMap = if isAttackOrPawnMove 
-			    then Map.singleton (hashCheckboard middleBoard) 1 
-                            else  Map.alter updateMap (hashCheckboard middleBoard) (historyMap middleBoard) --TODO update with xor
-         isAttackOrPawnMove = movedPiece == (CPiece Pawn White) || movedPiece == (CPiece Pawn Black) || attackedPiece /= Empty
+         isAttackOrPawnMove = p movedPiece ==  Pawn || attackedPiece /= Empty
          newMovesNoAttackNoPawn = if isAttackOrPawnMove 
                                      then 0 
 				     else (movesNoAttackNoPawn x) + 1
-         updateMap Nothing = Just 1
-         updateMap (Just x) = Just (x + 1)         
+
 
 
 computeStatus :: Checkboard -> Status
 computeStatus x
    | movesNoAttackNoPawn x == no_attack_no_pawn_move_limit = Draw -- move limit
-   |  (historyMap x) Map.! (hashCheckboard x) == 3 = Draw --3 the same rule
+   | (historyMap x) Map.! (hash x) == 3 = Draw   --3 the same rule
    | isAnyPossible =  InProgress
-   | not isAnyPossible && isInCheck x whoN &&  whoN == White = BlackWon
-   | not isAnyPossible &&  isInCheck x whoN &&  whoN == Black = WhiteWon
+   | someoneWon &&  whoN == White = BlackWon
+   | someoneWon &&  whoN == Black = WhiteWon
    | not isAnyPossible &&  not (isInCheck x whoN) = Draw
   where
       isAnyPossible = isAnyMovePossible x
       whoN = whoNext x
+      someoneWon = not isAnyPossible && isInCheck x whoN
 
 
 isMovePossible::  (Int, Int) -> CPiece -> Bool
@@ -83,10 +89,10 @@ isMovePossible move piece
     (fromY, fromX) = (fst move `divMod` 8)
     (toY, toX) = (snd move `divMod` 8)
 
-getPossibleMovesTable:: CPiece -> V.Vector [(Int, Int)]
-getPossibleMovesTable cpiece
- | cpiece == Empty = V.map (\x -> [  ])  (V.enumFromTo 0 63)
- | otherwise = V.map (\x -> [(x,y) | y<-[0..63], isMovePossible (x, y) cpiece  ])  (V.enumFromTo 0 63)
+getPossibleMovesTable:: CPiece -> Color -> V.Vector [(Int, Int)]
+getPossibleMovesTable cpiece color
+ | cpiece == Empty || c cpiece /= color = V.map (\x -> [  ])  numVec
+ | otherwise = V.map (\x -> [(x,y) | y<-numList, isMovePossible (x, y) cpiece  ])  numVec
 
 isPieceBetween:: V.Vector CPiece -> (Int, Int) -> Bool
 isPieceBetween vector move
@@ -94,7 +100,7 @@ isPieceBetween vector move
   | fromX == toX = (not $ all  (==Empty) (map (vector V.!) [8 * y + toX  | y <- [(minY + 1)..(maxY -1)]]))
   | fromY == toY = (not $ all  (==Empty) (map (vector V.!) [8 * toY + x  | x <- [(minX + 1)..(maxX -1)]]))
   | abs(fromX - toX) == abs(fromY - toY) = (not $ all  (==Empty) (map (vector V.!)
-                           [8 * y + x  | x <- [(minX + 1)..(maxX -1)],   y <- [(minY + 1)..(maxY -1)],  abs(x - toX) == abs(y - toY)  ]))
+                           [8 * y + x  | x <- [(minX + 1)..(maxX -1)],   y <- [(minY + 1)..(maxY -1)],  abs(x - toX) == abs(y - toY)]))
   | otherwise = False
   where (fromY, fromX) = (fst move `divMod` 8)
 	(toY, toX) = (snd move `divMod` 8)
@@ -102,7 +108,7 @@ isPieceBetween vector move
 	maxY = max toY  fromY
 	minX = min toX  fromX
 	maxX = max toX  fromX
---[(from, to) | from <- [0..63], to <- [0..63], (initialBoard V.! from) /= Empty,  isMovePossible (from, to) (initialBoard V.! from), not $ isPieceBetween initialBoard (from,to)]
+--[(from, to) | from <- numList, to <- numList, (initialBoard V.! from) /= Empty,  isMovePossible (from, to) (initialBoard V.! from), not $ isPieceBetween initialBoard (from,to)]
 
 isMoveLegal:: Checkboard -> (Int, Int) -> Bool
 isMoveLegal checkboard move
@@ -127,7 +133,7 @@ isInCheck:: Checkboard -> Color -> Bool
 isInCheck checkboard color =  possibleAttacks /= []
   where kingPos = fromJust $ V.findIndex (CPiece King color ==) vector
         vector = board checkboard
-        oppPositions = [x | x <- [0..63], vector V.! x /= Empty,  c (vector V.! x) == oppColor]
+        oppPositions = [x | x <- numList, vector V.! x /= Empty,  c (vector V.! x) == oppColor]
         oppColor = getOppColor color
         pawnPositionsColKing = [(kingPos - 8), (kingPos + 8)] `intersect` [x | x <- oppPositions,  p (vector V.! x) == Pawn]
         possibleAttacks = [(from, kingPos) | from <- oppPositions,
@@ -141,4 +147,5 @@ willBeInCheck a b c = isInCheck (moveWithoutAssert a b) c
 isAnyMovePossible::Checkboard  -> Bool
 isAnyMovePossible checkboard = [(from, to) | (from, to)  <- precompiledMoves, isMoveLegal checkboard (from, to)] /= []
  where
-   precompiledMoves =  foldl (++) [] (map  (\from -> ((getPossibleMovesTable ((board checkboard) V.! from)) V.! from)) [0..63] `using` rpar)
+   precompiledMoves =  foldl (++) [] (map  (\from -> ((getPossibleMovesTable (board checkboard V.! from) color) V.! from)) numList `using` rpar)
+   color = whoNext checkboard

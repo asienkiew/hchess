@@ -23,8 +23,11 @@ data Checkboard = Checkboard {
            whoNext :: Color, 
            status :: Status,
            history :: [Checkboard],
+           whoWasAttackedLast :: CPiece,
 	   movesNoAttackNoPawn :: Int, --number of moves with attack and pawn
-           historyMap :: Map.Map ChHash Int } deriving( Eq)
+           historyMap :: Map.Map ChHash Int,
+           hash :: ChHash -- current hash
+           } deriving( Eq)
 instance NFData Checkboard
 data Status = Draw | WhiteWon | BlackWon | InProgress deriving (Eq)
 
@@ -40,7 +43,7 @@ instance Show Status where
     show WhiteWon =  "The End - White won"
     show BlackWon =  "The End - Black won"
     show InProgress =  "Game is on progress"
-    
+
 
 stringToMove ::  [Char] -> (Int,Int)
 stringToMove x
@@ -51,43 +54,37 @@ stringToMove x
   |  not (d `elem` columns) = err
   |  otherwise =   ((8 * (ord b - 49) + ord a - 97), (8 * (ord d - 49) + ord c - 97))
   where
-     rows = ['a'..'h']
-     columns = ['1'..'8']
      err = (0,0) --error "bad format of Command"
      a = toLower(x !! 0)
      b = toLower(x !! 1)
      c = toLower(x !! 2)
      d = toLower(x !! 3)
 
+
 moveToString ::  (Int,Int) -> [Char]
 moveToString move  =   (rows !! fromX):(columns !! fromY):(rows !! toX):(columns !! toY) : []
   where
-     rows = ['a'..'h']
-     columns = ['1'..'8']
      (fromY, fromX) = (fst move `divMod` 8)
      (toY, toX) = (snd move `divMod` 8)
 
+
 printBoard :: Checkboard  -> IO ()
 printBoard checkboard = putStr $ checkboardToStr checkboard
+
 
 checkboardToStr :: Checkboard  -> [Char]
 checkboardToStr checkboard
   | V.length a /= 64 = error "Bad format"
   | otherwise  = concat . reverse $
-
                 border  ++
                 zipWith3  (\x y z -> x ++ y ++ z)
                        (map (\x -> [x] ++ "  ") columns)
                        (splitEvery 16 (concat (map (:' ':[]) (map convertToChar (V.toList a) ))))
                        (map (\x -> [' '] ++ [x] ++ ['\n']) columns)
                 ++ border
-
-
-  where rows = ['a'..'h']
-        columns = ['1'..'8']
+  where
         border = ["\n   " ++ concat (map (:' ':[])  rows) ++ " \n\n"]
         a = board checkboard
-
 
 
 convertToChar :: CPiece -> Char
@@ -107,6 +104,7 @@ convertToChar x
     | x == (Empty) = '.'
     | otherwise = error "bad piece"
 
+
 convert :: Char -> CPiece
 convert x
     | x =='Q' = (CPiece Queen White)
@@ -123,6 +121,7 @@ convert x
     | x == 'p' = (CPiece Pawn Black)
     | x == '.' = (Empty)
     | otherwise = error "bad letter"
+
 
 getOppColor:: Color -> Color
 getOppColor color = if (color == White) then Black else White

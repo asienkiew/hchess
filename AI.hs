@@ -42,17 +42,18 @@ getBestMove level checkboard
   | status checkboard == WhiteWon && whoAtBegin == White = (100000, (0,0))
   | status checkboard == WhiteWon && whoAtBegin == Black = (-100000, (0,0))
   | level == 0 =  ((extremumFunc movesScores), moves V.! (extremumFuncIndex movesScores))
-  | level < game_tree_depth = ( ( extremumFunc movesScores), (0,0))
+  | (level < game_tree_depth) || (level == game_tree_depth && deepenOne) = ( ( extremumFunc movesScores), (0,0)) --1 level deepening
 
-  | level == game_tree_depth = (getScore checkboard whoAtBegin, (0,0))
+  | level >= game_tree_depth = (getScore checkboard whoAtBegin, (0,0))
   where
+        deepenOne = deepenOnAttack && whoWasAttackedLast checkboard /= Empty
         checkboardsAfterMove = (V.map (moveWithoutAssert checkboard) moves) `using` (parVector 3)
         moves = V.fromList  [(from, to) | (from, to)  <- precompiledMoves, isMoveLegal checkboard (from, to)]
         whoAtBegin = if level `mod` 2 == 0 then whoNext checkboard else oppColor
-        oppColor = if (whoNext checkboard == White) then Black else White
+        oppColor =  getOppColor $ whoNext checkboard
         extremumFuncIndex = if level `mod` 2 == 0 then V.maxIndex else V.minIndex
         extremumFunc = if level `mod` 2 == 0 then V.maximum else V.minimum
         sign = if whoAtBegin == whoNext checkboard then (1) else (-1)
-        precompiledMoves = foldl (++) [] (map  (\from -> ((getPossibleMovesTable ((board checkboard) V.! from)) V.! from)) [0..63] `using` rdeepseq)
+        precompiledMoves = foldl (++) [] (map  (\from -> ((getPossibleMovesTable ((board checkboard) V.! from) (whoNext checkboard) ) V.! from)) [0..63] `using` rdeepseq)
         movesScores =  V.map  (fst . ( getBestMove (level + 1)))  checkboardsAfterMove `using` (parVector 3)
 

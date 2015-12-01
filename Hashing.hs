@@ -7,14 +7,13 @@ import qualified Data.Vector as V
 
 import Structures 
 
-
-
 randomValues :: [ChHash] 
 randomValues = map fst $ scanl (\(r, gen) _ -> random gen) (random (mkStdGen 1)) $ repeat ()
 
 
 hashTable :: V.Vector ChHash
-hashTable = V.fromList $ take (6 * 2 * 64 + 2) randomValues  -- [White, Black]* [pieces]* [files] + whonext
+hashTable = V.fromList $ take (6 * 2 * 64 + 1) randomValues  -- [White, Black]* [pieces]* [files] + whonext
+
 
 cpieceOnPosToHash :: Int -> CPiece -> ChHash
 cpieceOnPosToHash pos cpiece 
@@ -36,4 +35,12 @@ cpieceOnPosToHash pos cpiece
 hashCheckboard ::  Checkboard -> ChHash
 hashCheckboard a = hashedBoard `xor` whoNextHash
   where hashedBoard = V.foldl (xor) 0 (V.imap cpieceOnPosToHash (board a))
-        whoNextHash = if whoNext a == White then hashTable V.! (6 * 2 * 64) else hashTable V.! (6 * 2 * 64 + 1)
+        whoNextHash = if whoNext a == White then V.last hashTable else 0
+
+
+hashCheckboardWithMove ::  ChHash -> (Int, Int) -> (CPiece, CPiece, CPiece) ->ChHash
+hashCheckboardWithMove hash move (movedPiece, attackedPiece, reallyMovedPiece) =
+          foldl (xor) 0 [hash, h from movedPiece, h to attackedPiece, h to reallyMovedPiece, V.last hashTable]
+         where
+           (from, to) =  move
+           h = cpieceOnPosToHash

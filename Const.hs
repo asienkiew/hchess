@@ -2,12 +2,22 @@ module Const where
 
 import qualified Data.Vector as V
 
-game_tree_depth = 4 :: Int
+game_tree_depth = 3 :: Int
+deepenOnAttack = True
 no_attack_no_pawn_move_limit = 50 :: Int
 
 standard_board_string = "RNBQKBNR" ++ replicate 8 'P' ++ replicate 32 '.' ++ replicate 8 'p' ++ "rnbqkbnr"
 white_won_board_string = "RNB.KBN." ++ replicate 47 '.' ++ "R..k....."
 black_won_board_string = "....KB.qb..P...P.P....P...Pb..............n.....ppp..Pppr...Qk.r"
+promotion_board_string = "RNB.KBN." ++ replicate 46 '.' ++ "PR..k....."
+
+start_board_string = standard_board_string
+
+
+rows = ['a'..'h']
+columns = ['1'..'8']
+numList =  [0 :: Int .. 63 :: Int]
+numVec = V.fromList numList
 
 whitePawnEval :: V.Vector Int
 whiteKnightEval :: V.Vector Int
