@@ -49,11 +49,12 @@ getBestMove level checkboard
         deepenOne = deepenOnAttack && whoWasAttackedLast checkboard /= Empty
         checkboardsAfterMove = (V.map (moveWithoutAssert checkboard) moves) `using` (parVector 3)
         moves = V.fromList  [(from, to) | (from, to)  <- precompiledMoves, isMoveLegal checkboard (from, to)]
-        whoAtBegin = if level `mod` 2 == 0 then whoNext checkboard else oppColor
-        oppColor =  getOppColor $ whoNext checkboard
+        whoAtBegin = if level `mod` 2 == 0 then whoN else oppColor
+        oppColor =  getOppColor $ whoN
         extremumFuncIndex = if level `mod` 2 == 0 then V.maxIndex else V.minIndex
         extremumFunc = if level `mod` 2 == 0 then V.maximum else V.minimum
-        sign = if whoAtBegin == whoNext checkboard then (1) else (-1)
-        precompiledMoves = foldl (++) [] (map  (\from -> ((getPossibleMovesTable ((board checkboard) V.! from) (whoNext checkboard) ) V.! from)) [0..63] `using` rdeepseq)
+        sign = if whoAtBegin == whoN then (1) else (-1)
+        precompiledMoves = foldl (++) [] (map  (\from -> ((gPMTable ((board checkboard) V.! from) (whoN) ) V.! from)) numList `using` rdeepseq)
         movesScores =  V.map  (fst . ( getBestMove (level + 1)))  checkboardsAfterMove `using` (parVector 3)
-
+        whoN = whoNext checkboard
+        gPMTable = getPossibleMovesTable
