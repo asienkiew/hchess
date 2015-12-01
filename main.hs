@@ -1,10 +1,14 @@
-import Structures
-import AI
+
 import Control.Monad
 import qualified Data.Vector as V
-import Const
+
 import qualified Data.Map as Map
 
+import Const
+import Structures
+import Checkboard
+import AI
+import Hashing
 --ghc --make  -O2  -threaded -o chess main.hs
 -- ./main +RTS -N4
 
