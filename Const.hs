@@ -6,10 +6,10 @@ game_tree_depth = 3 :: Int
 deepenOnAttack = True
 no_attack_no_pawn_move_limit = 50 :: Int
 
-standard_board_string = "RNBQKBNR" ++ replicate 8 'P' ++ replicate 32 '.' ++ replicate 8 'p' ++ "rnbqkbnr"
-white_won_board_string = "RNB.KBN." ++ replicate 47 '.' ++ "R..k....."
+standard_board_string  = "RNBQKBNRPPPPPPPP................................pppppppprnbqkbnr"
+white_won_board_string = "RNB.KBN................................................R..k....."
 black_won_board_string = "....KB.qb..P...P.P....P...Pb..............n.....ppp..Pppr...Qk.r"
-promotion_board_string = "RNB.KBN." ++ replicate 46 '.' ++ "PR..k....."
+promotion_board_string = "RNB.KBN...............................................PR..k....."
 
 start_board_string = standard_board_string
 

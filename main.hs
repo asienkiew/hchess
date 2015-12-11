@@ -28,7 +28,7 @@ playGame chBoard = do
                                 playGame chBoard
         (InProgress, Black) -> do
             print $ whoNext chBoard	  
-	    let bestMove = (snd $ getBestMove 0 chBoard)
+	    let bestMove = getBestMove chBoard
 	    putStr $ "Chosen Move: " ++ (moveToString bestMove)	    
 	    playGame $ moveWithoutAssert chBoard bestMove
         (_, _) -> do
