@@ -34,13 +34,14 @@ cpieceOnPosToHash pos cpiece
     
 hashCheckboard ::  Checkboard -> ChHash
 hashCheckboard a = hashedBoard `xor` whoNextHash
-  where hashedBoard = V.foldl (xor) 0 (V.imap cpieceOnPosToHash (board a))
-        whoNextHash = if whoNext a == White then V.last hashTable else 0
+  where 
+    hashedBoard = V.foldl (xor) 0 (V.imap cpieceOnPosToHash (board a))
+    whoNextHash = if whoNext a == White then V.last hashTable else 0
 
 
 hashCheckboardWithMove ::  ChHash -> (Int, Int) -> (CPiece, CPiece, CPiece) ->ChHash
 hashCheckboardWithMove hash move (movedPiece, attackedPiece, reallyMovedPiece) =
           foldl (xor) 0 [hash, h from movedPiece, h to attackedPiece, h to reallyMovedPiece, V.last hashTable]
-         where
-           (from, to) =  move
-           h = cpieceOnPosToHash
+  where
+    (from, to) =  move
+    h = cpieceOnPosToHash

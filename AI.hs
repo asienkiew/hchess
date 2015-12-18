@@ -46,9 +46,10 @@ cpieceToValue who isEndGame pos cpiece
   |p  cpiece == Queen =  sign * (900 + ( whiteQueenEval V.! corr_pos))
   |p  cpiece == King =   sign * (100000 + ( whiteKingEval V.! corr_pos))
   | otherwise = 0
-  where sign = if who == (c cpiece) then (1) else (-1)
-	corr_pos = if (c cpiece) == White then pos else (63 - pos)
-	whiteKingEval = if isEndGame then whiteKingEndEval else whiteKingMiddleEval
+  where 
+    sign = if who == (c cpiece) then (1) else (-1)
+    corr_pos = if (c cpiece) == White then pos else (63 - pos)
+    whiteKingEval = if isEndGame then whiteKingEndEval else whiteKingMiddleEval
 
 
 getDepthLevelAdd:: (Int, Int) -> Int
@@ -75,18 +76,17 @@ getBestMoveRecur level depth isEndGame checkboard
   | status checkboard == WhiteWon && whoAtBegin == Black = (-100000, (0,0))
   | level == 0 =  ((extremumFunc movesScores), moves V.! (extremumFuncIndex movesScores))
   | (level < depth) || (level == depth && deepenOne) = ( ( extremumFunc movesScores), (0,0)) --1 level deepening
-
   | level >= depth = (getScore checkboard whoAtBegin isEndGame, (0,0))
   where
-        deepenOne = deepenOnAttack && whoWasAttackedLast checkboard /= Empty
-        checkboardsAfterMove = (V.map (moveWithoutAssert checkboard) moves) `using` (parVector 3)
-        moves = V.fromList  [(from, to) | (from, to)  <- precompiledMoves, isMoveLegal checkboard (from, to)]
-        whoAtBegin = if level `mod` 2 == 0 then whoN else oppColor
-        oppColor =  getOppColor $ whoN
-        extremumFuncIndex = if level `mod` 2 == 0 then V.maxIndex else V.minIndex
-        extremumFunc = if level `mod` 2 == 0 then V.maximum else V.minimum
-        sign = if whoAtBegin == whoN then (1) else (-1)
-        precompiledMoves = foldl (++) [] (map  (\from -> ((gPMTable ((board checkboard) V.! from) (whoN) ) V.! from)) numList `using` rdeepseq)
-        movesScores =  V.map  (fst . ( getBestMoveRecur (level + 1) depth isEndGame))  checkboardsAfterMove `using` (parVector 3)
-        whoN = whoNext checkboard
-        gPMTable = getPossibleMovesTable
+    deepenOne = deepenOnAttack && whoWasAttackedLast checkboard /= Empty
+    checkboardsAfterMove = (V.map (moveWithoutAssert checkboard) moves) `using` (parVector 3)
+    moves = V.fromList  [(from, to) | (from, to)  <- precompiledMoves, isMoveLegal checkboard (from, to)]
+    whoAtBegin = if level `mod` 2 == 0 then whoN else oppColor
+    oppColor =  getOppColor $ whoN
+    extremumFuncIndex = if level `mod` 2 == 0 then V.maxIndex else V.minIndex
+    extremumFunc = if level `mod` 2 == 0 then V.maximum else V.minimum
+    sign = if whoAtBegin == whoN then (1) else (-1)
+    precompiledMoves = foldl (++) [] (map  (\from -> ((gPMTable ((board checkboard) V.! from) (whoN) ) V.! from)) numList `using` rdeepseq)
+    movesScores =  V.map  (fst . ( getBestMoveRecur (level + 1) depth isEndGame))  checkboardsAfterMove `using` (parVector 3)
+    whoN = whoNext checkboard
+    gPMTable = getPossibleMovesTable
